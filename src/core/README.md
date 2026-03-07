@@ -1,19 +1,17 @@
 # Core
 
-엔진 오케스트레이션 계층입니다.
+엔진의 보조/호환 계층입니다.
 
 ## 역할
 
 - `preview-engine.ts`
-  - 전체 파이프라인 실행
-  - fetch 실패 시 graceful fallback
-  - 최종 결과를 schema로 검증
+  - 호환용 export (`engine/preview-engine.ts` 위임)
 - `preview-factory.ts`
   - `resourceType`에 맞는 normalizer 선택
+- `preview-factory.types.ts`
+  - 카드 팩토리 입력 interface
 
 ## 설계 포인트
 
-- 네트워크/추출/분류/판단/정규화를 한곳에서 순서 보장
-- `ContentProfileRegistry` + `SitePolicyRegistry`를 조합해
-  추출 전략과 capability 보정 책임을 분리
-- 기능 모듈은 작게 분리하고 Core는 조합에 집중
+- 오케스트레이션은 `engine/`으로 이동
+- core는 카드 생성 팩토리/호환 레이어에 집중

@@ -3,7 +3,7 @@ import type {
   CapabilityState,
   PolicyCapabilityInput,
   SitePolicyMatchInput,
-} from './site-policy'
+} from './site-policy.types'
 
 const NAVER_MAP_HOST_PATTERN = /(^|\.)map\.naver\.com$/i
 

@@ -13,7 +13,9 @@
 ## 구성
 
 - `site-policy.ts`
-  - 사이트 정책 추상 클래스
+  - 사이트 정책 추상 클래스(로직 전용)
+- `site-policy.types.ts`
+  - 정책 훅 입출력 interface/type
 - `policy-registry.ts`
   - 정책 등록/매칭/우선순위 관리
 - `youtube-site-policy.ts`

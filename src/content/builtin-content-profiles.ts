@@ -1,5 +1,8 @@
 import { ContentProfile } from './content-profile'
-import type { ContentExtractionRules, ContentProfileMatchInput } from './content-profile'
+import type {
+  ContentExtractionRules,
+  ContentProfileMatchInput,
+} from './content-profile.types'
 
 const YOUTUBE_HOST_PATTERN = /(^|\.)youtube\.com$|(^|\.)youtu\.be$/i
 const NAVER_MAP_HOST_PATTERN = /(^|\.)map\.naver\.com$/i

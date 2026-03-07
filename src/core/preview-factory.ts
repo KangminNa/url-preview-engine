@@ -1,11 +1,5 @@
 import type { PreviewCard } from '../types/card'
-import type {
-  InteractionMode,
-  PageKind,
-  Provider,
-  ResourceType,
-} from '../types/classification'
-import type { ExtractedMetadata } from '../types/metadata'
+import type { BuildCardInput } from './preview-factory.types'
 import { normalizeArticleCard } from '../normalizers/article-normalizer'
 import {
   normalizeAudioCard,
@@ -13,19 +7,6 @@ import {
 } from '../normalizers/image-normalizer'
 import { normalizeGenericCard } from '../normalizers/generic-normalizer'
 import { normalizeVideoCard } from '../normalizers/video-normalizer'
-
-export interface BuildCardInput {
-  originalUrl: string
-  resolvedUrl: string
-  provider: Provider
-  resourceType: ResourceType
-  pageKind: PageKind
-  metadata: ExtractedMetadata
-  embeddable: boolean
-  playable: boolean
-  interactionMode: InteractionMode
-  embedUrl?: string
-}
 
 export const buildPreviewCard = (input: BuildCardInput): PreviewCard => {
   if (input.resourceType === 'video') {
@@ -57,3 +38,5 @@ export const buildPreviewCard = (input: BuildCardInput): PreviewCard => {
     resourceType: 'unknown',
   })
 }
+
+export type { BuildCardInput } from './preview-factory.types'

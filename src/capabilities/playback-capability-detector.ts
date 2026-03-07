@@ -1,11 +1,5 @@
 import type { ResourceType } from '../types/classification'
-
-export interface PlaybackCapabilityInput {
-  resolvedUrl: URL
-  resourceType: ResourceType
-  contentType?: string
-  embeddable: boolean
-}
+import type { PlaybackCapabilityInput } from './playback-capability-detector.types'
 
 const directMediaPlayable = (
   url: URL,
@@ -42,3 +36,5 @@ export const detectPlaybackCapability = ({
 
   return directMediaPlayable(resolvedUrl, contentType, resourceType)
 }
+
+export type { PlaybackCapabilityInput } from './playback-capability-detector.types'

@@ -5,7 +5,11 @@
 ## 구성
 
 - `content-profile.ts`
-  - 사이트별 추출 규칙(Strategy) 계약
+  - 사이트별 추출 규칙(Strategy) 추상 클래스
+- `content-profile.types.ts`
+  - 프로파일 매칭 입력/룰 interface
+- `content-profile-rules.ts`
+  - 프로파일 규칙 병합 유틸
 - `builtin-content-profiles.ts`
   - YouTube/Naver Map 기본 프로파일
 - `content-profile-registry.ts`

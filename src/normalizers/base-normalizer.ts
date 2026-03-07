@@ -1,27 +1,9 @@
 import type { BaseCard } from '../types/card'
-import type {
-  InteractionMode,
-  PageKind,
-  Provider,
-  ResourceType,
-} from '../types/classification'
-import type { ExtractedMetadata } from '../types/metadata'
+import type { BaseNormalizerInput } from './base-normalizer.types'
 import { selectAuthor } from '../selectors/author-selector'
 import { selectDescription } from '../selectors/description-selector'
 import { selectImageUrl } from '../selectors/image-selector'
 import { selectTitle } from '../selectors/title-selector'
-
-export interface BaseNormalizerInput {
-  originalUrl: string
-  resolvedUrl: string
-  provider: Provider
-  resourceType: ResourceType
-  pageKind: PageKind
-  metadata: ExtractedMetadata
-  embeddable: boolean
-  playable: boolean
-  interactionMode: InteractionMode
-}
 
 export const normalizeBaseCard = (
   input: BaseNormalizerInput,
@@ -48,3 +30,5 @@ export const normalizeBaseCard = (
     interactionMode: input.interactionMode,
   }
 }
+
+export type { BaseNormalizerInput } from './base-normalizer.types'

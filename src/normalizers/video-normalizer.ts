@@ -1,10 +1,6 @@
 import type { VideoCard } from '../types/card'
-import type { BaseNormalizerInput } from './base-normalizer'
+import type { VideoNormalizerInput } from './card-normalizer.types'
 import { normalizeBaseCard } from './base-normalizer'
-
-export interface VideoNormalizerInput extends BaseNormalizerInput {
-  embedUrl?: string
-}
 
 export const normalizeVideoCard = (
   input: VideoNormalizerInput,
@@ -19,3 +15,5 @@ export const normalizeVideoCard = (
     duration: input.metadata.duration,
   }
 }
+
+export type { VideoNormalizerInput } from './card-normalizer.types'

@@ -4,12 +4,12 @@ import {
 } from './builtin-content-profiles'
 import {
   mergeContentExtractionRules,
-} from './content-profile'
+} from './content-profile-rules'
 import type {
   ContentExtractionRules,
-  ContentProfile,
   ContentProfileMatchInput,
-} from './content-profile'
+} from './content-profile.types'
+import type { ContentProfile } from './content-profile'
 
 export class ContentProfileRegistry {
   private readonly profiles: ContentProfile[]

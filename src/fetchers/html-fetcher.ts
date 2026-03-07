@@ -1,4 +1,5 @@
 import type { FetchResult } from '../types/metadata'
+import type { FetchHtmlOptions } from './html-fetcher.types'
 
 const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
@@ -57,10 +58,6 @@ const readHtmlWithLimit = async (response: Response): Promise<string> => {
   return output
 }
 
-export interface FetchHtmlOptions {
-  userAgent?: string
-}
-
 export const fetchHtml = async (
   url: URL,
   options: FetchHtmlOptions = {},
@@ -90,3 +87,5 @@ export const fetchHtml = async (
     html,
   }
 }
+
+export type { FetchHtmlOptions } from './html-fetcher.types'

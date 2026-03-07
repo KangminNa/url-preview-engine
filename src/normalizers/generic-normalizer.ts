@@ -1,10 +1,6 @@
 import type { GenericCard } from '../types/card'
-import type { BaseNormalizerInput } from './base-normalizer'
+import type { GenericNormalizerInput } from './card-normalizer.types'
 import { normalizeBaseCard } from './base-normalizer'
-
-export interface GenericNormalizerInput extends BaseNormalizerInput {
-  embedUrl?: string
-}
 
 export const normalizeGenericCard = (
   input: GenericNormalizerInput,
@@ -24,3 +20,5 @@ export const normalizeGenericCard = (
     embedUrl: input.embedUrl,
   }
 }
+
+export type { GenericNormalizerInput } from './card-normalizer.types'

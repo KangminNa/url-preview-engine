@@ -1,10 +1,6 @@
 import type { ArticleCard } from '../types/card'
-import type { BaseNormalizerInput } from './base-normalizer'
+import type { ArticleNormalizerInput } from './card-normalizer.types'
 import { normalizeBaseCard } from './base-normalizer'
-
-export interface ArticleNormalizerInput extends BaseNormalizerInput {
-  embedUrl?: string
-}
 
 export const normalizeArticleCard = (
   input: ArticleNormalizerInput,
@@ -24,3 +20,5 @@ export const normalizeArticleCard = (
     excerpt: input.metadata.excerpt,
   }
 }
+
+export type { ArticleNormalizerInput } from './card-normalizer.types'

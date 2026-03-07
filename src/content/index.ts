@@ -1,11 +1,11 @@
 export {
   ContentProfile,
-  mergeContentExtractionRules,
 } from './content-profile'
 export type {
   ContentExtractionRules,
   ContentProfileMatchInput,
-} from './content-profile'
+} from './content-profile.types'
+export { mergeContentExtractionRules } from './content-profile-rules'
 export {
   ContentProfileRegistry,
   createContentProfileRegistry,

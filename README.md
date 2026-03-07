@@ -141,6 +141,7 @@ URL Input
 
 ```text
 src/
+  engine/
   core/
   content/
   fetchers/
@@ -173,7 +174,11 @@ src/
 
 ```text
 core/
-  preview-engine.ts          # 전체 파이프라인 오케스트레이션
+  preview-factory.ts         # 카드 타입별 생성 팩토리
+engine/
+  preview-engine.ts          # preview(url, options) 진입점
+  preview-pipeline.ts        # 단계형 파이프라인
+  stages/*                   # bootstrap -> fetch -> dynamic -> classify -> build
 content/
   content-profile.ts         # 사이트별 추출 전략 계약(Strategy)
   builtin-content-profiles.ts

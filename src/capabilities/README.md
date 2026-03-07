@@ -10,6 +10,8 @@
   - direct media / mime type / embeddable 여부로 재생 가능성 판단
 - `interaction-mode-resolver.ts`
   - `embeddable > playable > expandable > static` 우선순위로 최종 모드 결정
+- `*.types.ts`
+  - detector 입력/출력 interface 분리
 
 ## 설계 포인트
 

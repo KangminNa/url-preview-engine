@@ -1,15 +1,7 @@
 import type {
   InteractionMode,
-  PageKind,
-  ResourceType,
 } from '../types/classification'
-
-export interface InteractionModeInput {
-  embeddable: boolean
-  playable: boolean
-  resourceType: ResourceType
-  pageKind: PageKind
-}
+import type { InteractionModeInput } from './interaction-mode-resolver.types'
 
 export const resolveInteractionMode = ({
   embeddable,
@@ -31,3 +23,5 @@ export const resolveInteractionMode = ({
 
   return 'static'
 }
+
+export type { InteractionModeInput } from './interaction-mode-resolver.types'

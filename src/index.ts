@@ -1,4 +1,4 @@
-export { preview } from './core/preview-engine'
+export { preview } from './engine/preview-engine'
 export { SitePolicy, YouTubeSitePolicy, NaverMapSitePolicy } from './policies'
 export {
   ContentProfile,
@@ -7,6 +7,11 @@ export {
   YouTubeContentProfile,
   NaverMapContentProfile,
 } from './content'
+export {
+  PreviewPipeline,
+  createDefaultPreviewPipeline,
+  PreviewStage,
+} from './engine'
 
 export type {
   AudioCard,
@@ -28,3 +33,4 @@ export type {
   ContentExtractionRules,
   ContentProfileMatchInput,
 } from './content'
+export type { PreviewPipelineState } from './engine'

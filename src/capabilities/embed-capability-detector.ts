@@ -1,23 +1,8 @@
-import type { PageKind, ResourceType } from '../types/classification'
-import type { ExtractedMetadata } from '../types/metadata'
-
-export interface EmbedCapabilityResult {
-  embeddable: boolean
-  embedUrl?: string
-}
-
-export interface EmbedCapabilityInput {
-  url: URL
-  resourceType: ResourceType
-  pageKind: PageKind
-  metadata: ExtractedMetadata
-}
-
-interface EmbedRule {
-  id: string
-  test: (input: EmbedCapabilityInput) => boolean
-  resolve: (input: EmbedCapabilityInput) => EmbedCapabilityResult
-}
+import type {
+  EmbedCapabilityInput,
+  EmbedCapabilityResult,
+  EmbedRule,
+} from './embed-capability-detector.types'
 
 const EMBED_PATH_HINT = /(\/embed\/|\/player\/)/i
 
@@ -73,3 +58,8 @@ export const detectEmbedCapability = (
 
   return { embeddable: false }
 }
+
+export type {
+  EmbedCapabilityInput,
+  EmbedCapabilityResult,
+} from './embed-capability-detector.types'

@@ -7,7 +7,7 @@ import type {
   PolicyClassificationInput,
   PolicyMetadataInput,
   SitePolicyMatchInput,
-} from './site-policy'
+} from './site-policy.types'
 
 const YOUTUBE_HOST_PATTERN = /(^|\.)youtube\.com$|(^|\.)youtu\.be$/i
 const isYouTubeHost = (host: string): boolean => {

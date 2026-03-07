@@ -1,6 +1,10 @@
 import type { ResourceType } from '../types/classification'
 import type { ExtractedMetadata } from '../types/metadata'
 import { classifyUrlShape, isLikelyArticlePath } from './url-classifier'
+import type {
+  ResourceTypeInput,
+  ResourceTypeRule,
+} from './resource-type-classifier.types'
 
 const isContentType = (contentType: string | undefined, target: string): boolean => {
   if (!contentType) {
@@ -8,12 +12,6 @@ const isContentType = (contentType: string | undefined, target: string): boolean
   }
 
   return contentType.toLowerCase().includes(target)
-}
-
-export interface ResourceTypeInput {
-  url: URL
-  metadata: ExtractedMetadata
-  contentType?: string
 }
 
 const hasAnyMetadataSignal = (metadata: ExtractedMetadata): boolean => {
@@ -61,12 +59,6 @@ const metadataSuggestsArticle = (metadata: ExtractedMetadata): boolean => {
   }
 
   return false
-}
-
-interface ResourceTypeRule {
-  id: string
-  test: (input: ResourceTypeInput) => boolean
-  output: ResourceType
 }
 
 const RULES: ResourceTypeRule[] = [
@@ -136,3 +128,5 @@ export const classifyResourceType = (input: ResourceTypeInput): ResourceType => 
 
   return 'unknown'
 }
+
+export type { ResourceTypeInput } from './resource-type-classifier.types'

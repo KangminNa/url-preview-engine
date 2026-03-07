@@ -9,6 +9,7 @@
 - `article-normalizer.ts`: `ArticleCard` 생성
 - `image-normalizer.ts`: `ImageCard` / `AudioCard` 생성
 - `generic-normalizer.ts`: social/website/unknown 카드 생성
+- `*.types.ts`: normalizer 입력 interface 분리
 
 ## 설계 포인트
 

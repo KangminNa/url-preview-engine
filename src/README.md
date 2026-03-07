@@ -14,7 +14,8 @@
 8. `normalizers`: 카드 타입별 결과 정규화
 9. `compressors`: 카드 출력 길이/예산 제한
 10. `schemas`: 런타임 계약 검증
-11. `core`: 전체 오케스트레이션
+11. `engine`: 단계형 파이프라인 오케스트레이션
+12. `core`: 카드 팩토리 등 호환/보조 계층
 
 ## 패턴
 
@@ -25,7 +26,13 @@
 - `Template Method`
   - `SitePolicy` 훅으로 classification/capability/card 보정
 
+## 파일 규칙
+
+- `*.types.ts`: `type/interface` 정의 전용 파일
+- `*.ts`(로직 파일): 함수/클래스/실행 로직 전용
+- 클래스가 있는 파일에는 interface를 두지 않고, 필요 타입은 `*.types.ts`에서 import
+
 ## 진입점
 
 - `index.ts`: public API export
-- `core/preview-engine.ts`: `preview(url, options)` 구현
+- `engine/preview-engine.ts`: `preview(url, options)` 구현

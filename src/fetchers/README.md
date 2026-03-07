@@ -12,6 +12,8 @@
   - redirect follow
   - content-type 기반 HTML 읽기 여부 결정
   - 최대 바이트 제한으로 과대 응답 방지
+- `html-fetcher.types.ts`
+  - fetch 옵션 interface
 
 ## 설계 포인트
 

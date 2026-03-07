@@ -1,16 +1,9 @@
-import type { PageKind, ResourceType } from '../types/classification'
+import type { PageKind } from '../types/classification'
 import { classifyUrlShape } from './url-classifier'
-
-export interface PageKindInput {
-  url: URL
-  resourceType: ResourceType
-}
-
-interface PageKindRule {
-  id: string
-  test: (input: PageKindInput) => boolean
-  output: PageKind
-}
+import type {
+  PageKindInput,
+  PageKindRule,
+} from './page-kind-classifier.types'
 
 const COLLECTION_PREFIXES = [
   '/tag/',
@@ -81,3 +74,5 @@ export const classifyPageKind = (input: PageKindInput): PageKind => {
 
   return 'unknown'
 }
+
+export type { PageKindInput } from './page-kind-classifier.types'
