@@ -340,10 +340,3 @@ src/
 2. provider detection
 3. card normalization
 
-이후 이를 기반으로 더 큰 제품으로 확장합니다.
-
----
-
-## 라이선스
-
-TBD
