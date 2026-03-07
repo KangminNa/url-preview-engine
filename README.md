@@ -1,342 +1,250 @@
 # url-preview-engine
 
-URL을 구조화된 미리보기 카드 객체로 변환하는 preview engine입니다.
+URL을 입력받아 **정규화된 preview card object**를 반환하는 TypeScript 기반 preview engine 패키지입니다.
 
-## 개요
-
-url-preview-engine은 URL을 분석하여 메타데이터와 콘텐츠 신호를 추출하고, 리소스 타입을 판별한 뒤, 렌더링 가능한 정규화된 preview card object를 반환하는 TypeScript 기반 패키지입니다.
-
-이 프로젝트는 아직 완성형 서비스나 아카이브 플랫폼이 아닙니다.
-현재 목표는 앞으로 만들 수 있는 다음과 같은 서비스들의 핵심 엔진 패키지를 만드는 것입니다.
-
-- 개인 URL 아카이브 서비스
-- SNS/피드형 링크 공유 서비스
-- Smart Preview API
-- 브라우저 확장 프로그램
-- 내부 링크 미리보기 렌더링 시스템
-
-이 프로젝트의 핵심 목표는 아래 한 문장으로 정리할 수 있습니다.
-
-**원시 URL을 미니 웹페이지 수준의 preview model로 변환한다.**
+이 프로젝트는 단순한 메타데이터 추출기가 아니라,  
+**정적 렌더링과 동적 렌더링을 모두 고려하여 URL이 가리키는 리소스를 해석하고, 대표성 있는 최소 정보만 선택해 렌더링 가능한 카드 모델로 정규화하는 엔진**을 목표로 합니다.
 
 ---
 
-## 프로젝트 목적
+## 1. 프로젝트 목적
 
-대부분의 링크 미리보기는 아래 수준에서 멈춥니다.
+웹의 링크 미리보기는 보통 아래 수준에서 끝납니다.
 
 - 제목
 - 설명
 - 대표 이미지
 
-하지만 이 프로젝트는 여기서 한 단계 더 나아가는 것을 목표로 합니다.
+하지만 실제 URL은 훨씬 다양한 리소스를 가리킵니다.
 
-url-preview-engine은 다음을 지향합니다.
+- 개별 영상
+- 소셜 포스트
+- 블로그 글
+- 기사
+- 이미지
+- 프로필 페이지
+- 컬렉션 페이지
+- 서비스 홈
+- 동적 렌더링 기반 SPA 페이지
 
-- URL을 안전하게 정규화하고 가져오기
-- 웹페이지의 메타데이터 추출하기
-- provider와 콘텐츠 타입 판별하기
-- 가능한 경우 임베드 가능성 판단하기
-- 결과를 재사용 가능한 카드 객체로 정규화하기
-- 다양한 서비스에서 활용 가능한 일관된 preview model 제공하기
+`url-preview-engine`은 이런 차이를 구분하지 않고 같은 방식으로 처리하는 대신,  
+**URL의 리소스 타입과 단위를 먼저 판별하고, 정적 HTML과 동적 렌더링 결과를 모두 활용해 preview card object를 생성**하는 것을 목표로 합니다.
 
-즉, 이 패키지는 단순한 메타데이터 추출기가 아니라,
-링크를 렌더링 가능한 미니 웹페이지 카드로 바꾸는 엔진을 목표로 합니다.
+즉, 이 엔진은 다음을 수행합니다.
+
+- URL 정규화
+- HTTP 응답 및 문서 성격 판별
+- 정적 HTML 기반 메타데이터 추출
+- 동적 렌더링 기반 DOM 정보 추출
+- provider 판별
+- resource type / page kind 분류
+- 후보 필드 선택
+- 카드 예산(card budget)에 맞춘 정보 압축
+- 최종 preview card object 반환
+
+이 프로젝트는 서비스 자체가 아니라,  
+향후 만들 아카이브/피드/SNS형 서비스의 **핵심 엔진 패키지**를 만드는 것이 목적입니다.
 
 ---
 
-## MVP 범위
+## 2. 핵심 철학
 
-첫 번째 MVP에서는 모든 웹페이지를 완벽하게 지원하는 것이 아니라,
-실용적이고 자주 쓰이는 URL 유형을 우선 지원하는 것을 목표로 합니다.
+이 프로젝트의 핵심은 “많이 긁어오는 것”이 아니라,  
+**적절한 단위로 분류하고, 대표값만 선택하고, 일관된 타입 객체로 정규화하는 것**입니다.
 
-### 1차 지원 대상
+### 이 엔진이 지향하는 것
+- 링크를 렌더링 가능한 카드 객체로 변환한다
+- 모든 URL을 동일하게 다루지 않는다
+- atomic resource와 homepage / collection / profile을 구분한다
+- 정적 렌더링과 동적 렌더링을 모두 지원한다
+- rich preview는 일부 타입에만 선택적으로 제공한다
+- downstream app이 바로 사용할 수 있는 안전한 모델을 반환한다
 
-**Video**
+### 이 엔진이 지향하지 않는 것
+- 원본 웹페이지 전체 복제
+- 범용 크롤러 플랫폼
+- 모든 사이트의 iframe 렌더링
+- 모든 동적 웹페이지 완벽 재현
+- provider 정책 우회
+
+---
+
+## 3. 왜 정적 렌더링과 동적 렌더링이 모두 필요한가
+
+웹페이지는 크게 두 방식으로 정보를 제공합니다.
+
+### 1) 정적 렌더링 기반 페이지
+초기 HTML 문서에 이미 충분한 정보가 있는 페이지입니다.
+
+예:
+- Open Graph가 잘 설정된 블로그
+- 일반 뉴스 기사
+- 서버 렌더링 기반 사이트
+- canonical, meta description, JSON-LD가 포함된 페이지
+
+이 경우에는 주로 아래를 읽으면 충분합니다.
+
+- `<title>`
+- `<meta>`
+- Open Graph
+- Twitter Cards
+- canonical URL
+- JSON-LD
+- 본문 excerpt 후보
+
+### 2) 동적 렌더링 기반 페이지
+초기 HTML에는 정보가 부족하고, JavaScript 실행 이후 DOM이 완성되는 페이지입니다.
+
+예:
+- SPA
+- CSR 기반 서비스
+- JS hydration 이후에 콘텐츠가 붙는 페이지
+- 일부 소셜/앱 스타일 페이지
+
+이 경우에는 단순 fetch만으로는 부족하고,  
+**브라우저 렌더링 이후의 DOM**을 읽어야 합니다.
+
+즉 이 엔진은 다음 두 경로를 모두 고려합니다.
+
+- **Static Extraction Path**
+- **Dynamic Rendering Path**
+
+그리고 최종적으로 둘 중 더 적절한 결과를 정규화하여 카드 객체로 반환합니다.
+
+---
+
+## 4. 엔진 관점의 문제 정의
+
+같은 도메인이라도 URL마다 의미가 다릅니다.
+
+예를 들어 YouTube는 다음처럼 나뉩니다.
+
+- `https://www.youtube.com/watch?v=...` → 단일 video resource
+- `https://www.youtube.com/playlist?...` → collection resource
+- `https://www.youtube.com/@channel` → profile resource
+- `https://www.youtube.com/` → homepage resource
+
+즉 엔진은 먼저 다음 질문에 답해야 합니다.
+
+1. 이 URL은 어떤 provider인가?
+2. 이 URL은 어떤 리소스 단위인가?
+3. 이 URL은 정적 추출만으로 충분한가?
+4. 동적 렌더링 fallback이 필요한가?
+5. 어떤 후보 정보가 대표값으로 적절한가?
+6. 최종 카드에는 어느 정도 정보까지만 담을 것인가?
+
+즉 `url-preview-engine`은 단순 scraping 도구가 아니라,  
+**classification → extraction → selection → compression → normalization pipeline**을 가진 엔진입니다.
+
+---
+
+## 5. MVP 목표
+
+첫 MVP의 목표는 “모든 웹페이지 완벽 지원”이 아닙니다.
+
+목표는 아래 5가지입니다.
+
+1. URL을 입력받아 preview 후보 정보를 추출할 수 있어야 한다
+2. URL의 provider / resource type / page kind를 분류할 수 있어야 한다
+3. 정적 HTML 기반 추출을 지원해야 한다
+4. 동적 렌더링 기반 추출 경로를 지원해야 한다
+5. 정규화된 카드 객체를 일관되게 반환할 수 있어야 한다
+
+---
+
+## 6. MVP 지원 범위
+
+### 1차 지원 Provider
+
+#### Video
 - YouTube
 
-**Social**
+#### Social
 - Instagram
 
-**Blog / Article**
+#### Blog / Article
 - 네이버 블로그
 - 티스토리
 - 브런치
 - Velog
 - Medium
-- 일반 blog/article 페이지
+- 일반 article / blog page
 
-**Generic Fallback**
-- 기본 메타데이터를 가진 일반 웹페이지
+#### Generic Fallback
+- 일반 웹페이지
 
----
-
-## MVP에서 제공할 기능
-
-- 입력 URL 정규화
-- 대상 HTML fetch
-- 메타데이터 추출
-- provider 판별
-- resource type 추론
-- 정규화된 preview card object 생성
-- 일부 주요 플랫폼에 대한 타입별 normalizer 제공
+### 1차 분류 대상
+- `video`
+- `social`
+- `article`
+- `website`
+- `homepage`
+- `collection`
+- `profile`
+- `unknown`
 
 ---
 
-## MVP에서 아직 하지 않는 것
+## 7. 처리 대상이 되는 정보 소스
 
-- 로그인 / 회원가입
-- DB 저장
-- 아카이브/피드 UI
-- 결제 / 수익화
-- 브라우저 수준의 전체 페이지 재현
-- 모든 웹사이트에 대한 iframe 기반 렌더링
-- 모든 동적 페이지에 대한 완벽 대응
+이 엔진은 단순히 HTTP header만 읽는 방식으로 동작하지 않습니다.  
+핵심은 **HTML 문서와 렌더링 결과 DOM**입니다.
 
----
+### 1) HTTP 응답 레벨
+주요 용도:
+- `content-type` 판별
+- redirect 추적
+- final resolved URL 확보
+- iframe 정책 참고 (`x-frame-options`, `content-security-policy`)
 
-## 핵심 개념
+### 2) 정적 HTML 문서 레벨
+주요 용도:
+- `<title>`
+- `<meta name="description">`
+- Open Graph (`og:*`)
+- Twitter Cards
+- canonical
+- JSON-LD
+- 본문 excerpt 후보
+- 대표 이미지 후보
+- author/date 후보
 
-이 엔진의 내부 흐름은 아래와 같이 설계합니다.
+### 3) 동적 렌더링 결과 레벨
+주요 용도:
+- CSR / SPA 사이트 대응
+- JavaScript 실행 이후 DOM 기반 정보 보강
+- 초기 HTML에 없는 콘텐츠 추출
+- 렌더 완료 후 대표 요소 선택
 
-```
-URL
-→ normalize
-→ fetch
-→ metadata 추출
-→ provider 판별
-→ resource type 추론
-→ card object 정규화
-→ downstream app에서 렌더링
-```
+즉 이 엔진은 다음을 모두 고려합니다.
 
-이 패키지의 목적은 원본 HTML을 그대로 반환하는 것이 아닙니다.
-목적은 안전하고 일관되게 렌더링 가능한 typed preview model을 반환하는 것입니다.
-
----
-
-## 카드 모델 설계 철학
-
-Preview Card는 크게 두 층으로 구성됩니다.
-
-### 1. 공통 메타데이터 레이어
-
-대부분의 URL이 공통적으로 제공할 수 있는 정보입니다.
-
-- title
-- description
-- image
-- site name
-- provider
-- author
-- published date
-- canonical URL
-
-### 2. 타입별 렌더링 레이어
-
-콘텐츠 타입에 따라 추가되는 필드입니다.
-
-- video player / embed 정보
-- article excerpt
-- social caption
-- image 중심 렌더링 힌트
-
-즉, 엔진은 아래를 반환해야 합니다.
-
-- 공통 base card 구조
-- 타입별 확장 구조
+- **HTTP response**
+- **static HTML**
+- **rendered DOM**
 
 ---
 
-## 예시 카드 타입
+## 8. 처리 흐름
 
-### BaseCard
-
-```typescript
-export type ResourceType =
-  | 'video'
-  | 'social'
-  | 'article'
-  | 'website'
-  | 'image'
-  | 'unknown'
-
-export interface BaseCard {
-  originalUrl: string
-  resolvedUrl: string
-  canonicalUrl?: string
-  provider: string
-  resourceType: ResourceType
-  title?: string
-  description?: string
-  imageUrl?: string
-  siteName?: string
-  author?: string
-  publishedAt?: string
-  embeddable: boolean
-}
-```
-
-### VideoCard
-
-```typescript
-export interface VideoCard extends BaseCard {
-  resourceType: 'video'
-  embedUrl?: string
-  duration?: number
-}
-```
-
-### ArticleCard
-
-```typescript
-export interface ArticleCard extends BaseCard {
-  resourceType: 'article'
-  excerpt?: string
-}
-```
-
----
-
-## 렌더링 전략
-
-이 엔진은 모든 URL을 iframe으로 처리하는 구조를 목표로 하지 않습니다.
-
-대신 아래와 같은 전략을 따릅니다.
-
-- 대부분의 페이지는 기본 메타데이터 카드로 처리
-- 직접 미디어가 가능하면 native media rendering 사용
-- 지원하는 provider에 한해 embed-aware rendering 지원
-
-예시:
-- YouTube → video-style preview card, 필요 시 embeddable
-- Blog article → image + title + excerpt + author/date
-- 일반 웹페이지 → fallback metadata card
-
----
-
-## 예정 기술 스택
-
-### 언어 / 런타임
-- TypeScript
-- Node.js
-
-### 핵심 라이브러리
-- metascraper : metadata extraction
-- zod : schema validation 및 normalization
-- vitest : 테스트
-- tsup : 패키지 빌드
-- eslint, prettier : 코드 품질 관리
-
-### 추후 확장 가능성
-- htmlparser2 : 커스텀 파싱 보강
-- Playwright 또는 browser 기반 fallback : 동적 페이지 대응
-
----
-
-## 예정 패키지 구조
-
-```
-src/
-  index.ts
-
-  core/
-    preview-engine.ts
-    preview-factory.ts
-
-  types/
-    card.ts
-    metadata.ts
-    provider.ts
-
-  extractors/
-    extractor.interface.ts
-    metascraper.extractor.ts
-
-  fetchers/
-    url-normalizer.ts
-    html-fetcher.ts
-
-  detectors/
-    provider-detector.ts
-    resource-type-detector.ts
-    embed-detector.ts
-
-  normalizers/
-    card-normalizer.ts
-    article-normalizer.ts
-    video-normalizer.ts
-    social-normalizer.ts
-    generic-normalizer.ts
-```
-
----
-
-## 개발 단계
-
-### Phase 1 — Package Skeleton
-- TypeScript package 초기화
-- lint / test / build 설정
-- preview card 타입 정의
-- engine interface 정의
-
-### Phase 2 — Generic Preview Extraction
-- URL normalize
-- HTML fetch
-- metadata extractor 연동
-- generic preview card 반환
-
-### Phase 3 — Provider Detection
-- YouTube, Instagram, blog/article 계열 도메인 판별
-- provider / resource type 기반 분기
-
-### Phase 4 — Type-specific Normalization
-- video card normalization
-- article card normalization
-- social card normalization
-
-### Phase 5 — Hardening
-- 에러 처리 보강
-- 테스트 커버리지 확대
-- README와 예제 보강
-- npm publish 준비
-
----
-
-## Non-Goals
-
-이 프로젝트는 첫 MVP에서 아래를 목표로 하지 않습니다.
-
-- 원본 웹페이지 전체 복제
-- provider 보안 정책 우회
-- 모든 URL의 iframe 렌더링
-- 범용 크롤링 플랫폼 구축
-
-현재의 목표는 더 좁고 명확합니다.
-
-**재사용 가능한 URL → Preview Card Engine을 만든다.**
-
----
-
-## 향후 방향
-
-이 패키지는 앞으로 아래와 같은 시스템의 핵심 엔진이 되는 것을 목표로 합니다.
-
-- URL 아카이브 서비스
-- 링크 기반 SNS 피드
-- 북마크 시각화 도구
-- Preview API
-- 외부 임베드용 preview widget
-
----
-
-## 현재 상태
-
-현재는 초기 MVP 설계 단계입니다.
-
-초기 목표는 아래 3가지를 안정화하는 것입니다.
-
-1. preview extraction
-2. provider detection
-3. card normalization
-
+```text
+URL 입력
+  ↓
+URL 정규화
+  ↓
+HTTP fetch
+  ↓
+응답 유형 판별
+  ↓
+정적 HTML 기반 추출 시도
+  ↓
+필요 시 동적 렌더링 수행
+  ↓
+Provider 판별
+  ↓
+Resource Type / Page Kind 분류
+  ↓
+후보 필드 선택
+  ↓
+Card Compression
+  ↓
+Preview Card Object 반환
