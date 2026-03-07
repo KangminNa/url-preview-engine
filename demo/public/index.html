@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>URL Preview Engine Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="background-glow glow-a"></div>
+    <div class="background-glow glow-b"></div>
+
+    <main class="layout">
+      <header class="hero">
+        <p class="eyebrow">URL Preview Engine</p>
+        <h1>Interaction-Aware Card Playground</h1>
+        <p class="subtitle">
+          URL을 입력하면 provider/type/page-kind/capability를 판단한 카드와 원본 JSON을
+          동시에 보여줍니다.
+        </p>
+      </header>
+
+      <section class="panel form-panel">
+        <form id="preview-form" autocomplete="off">
+          <label for="url-input">Preview URL</label>
+          <div class="input-row">
+            <input
+              id="url-input"
+              name="url"
+              type="url"
+              required
+              placeholder="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+              value="https://www.youtube.com/watch?v=abc123"
+            />
+            <button id="submit-button" type="submit">Render</button>
+          </div>
+        </form>
+        <p id="status" class="status">URL을 입력하고 Render를 눌러주세요.</p>
+      </section>
+
+      <section class="grid">
+        <article class="panel card-panel">
+          <h2>Rendered Card</h2>
+          <div id="card-root" class="card-root empty">결과 대기 중</div>
+        </article>
+
+        <article class="panel json-panel">
+          <h2>Raw JSON</h2>
+          <pre id="json-root" class="json-root">{}</pre>
+        </article>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

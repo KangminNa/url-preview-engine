@@ -1,199 +1,85 @@
 # 기획 문서
 
-## 프로젝트명
-
-**url-preview-engine**
-
 ## 프로젝트 한 줄 정의
 
-URL을 입력하면, 해당 리소스를 해석하여 미리보기 카드 객체로 변환하고, 화면에서 미니 웹페이지처럼 보이고 일부 상호작용까지 가능한 preview system의 핵심 엔진을 만든다.
+URL을 interaction-aware preview card object로 변환하는 embed-capable preview engine.
 
-## 프로젝트 배경
+## 진짜 목표
 
-일반적인 링크 미리보기는 보통 제목, 설명, 대표 이미지 정도만 보여준다.
+이 프로젝트는 단순 링크 카드 생성기가 아니라, URL의 **소비 가능성(interaction capability)** 을 판별해 가능한 수준까지 카드 내부 소비를 허용하는 엔진이다.
 
-하지만 실제 웹페이지는 훨씬 더 다양한 형태를 가진다:
+즉 URL마다 아래를 판단한다.
 
-- 영상
-- 소셜 포스트
-- 블로그 글
-- 기사
-- 이미지
-- 프로필
-- 컬렉션
-- 서비스 홈
+- 임베드 가능한가
+- 재생 가능한가
+- 펼침 가능한가
+- 정적 카드만 가능한가
 
-또한 어떤 페이지는 정적 HTML만으로 충분히 해석 가능하지만, 어떤 페이지는 JavaScript 실행 이후에야 의미 있는 정보가 나타난다.
+## 핵심 문제 정의
 
-따라서 단순한 OGP 파서가 아니라, **URL이 가리키는 리소스를 해석하고, 대표 정보를 선택해, 화면에서 바로 소비 가능한 카드 형태로 제공하는 엔진**이 필요하다.
+### A. 직접 소비 가능한 URL
 
-## 프로젝트 목적
+- YouTube/Vimeo 동영상
+- 직접 이미지/오디오/비디오 URL
+- 일부 소셜 포스트
+- oEmbed 지원 리소스
 
-이 프로젝트의 목적은 **URL을 렌더링 가능한 카드 객체로 정규화하는 엔진 패키지**를 만드는 것이다.
+### B. 직접 소비 불가능한 URL
 
-이 엔진은 단순히 메타데이터만 추출하는 것이 아니라:
+- 일반 기사/블로그
+- 홈페이지
+- 컬렉션/프로필 페이지
+- 로그인/정책 제한 페이지
 
-- URL의 성격을 분류하고
-- 정적/동적 렌더링 여부를 판단하고
-- 후보 정보 중 대표값을 선택하고
-- 타입이 명확한 카드 객체로 압축하여
-- 이후 서비스 UI에서 바로 렌더링 가능하게 만드는 것
+프로젝트 목표는 모든 URL 임베드가 아니라, URL capability에 맞춰 안전한 렌더 계약을 반환하는 것이다.
 
-을 목표로 한다.
+## MVP 목표
 
-## 핵심 목표
+1. provider 판별
+2. resource type / page kind 분류
+3. embed/playback capability 판별
+4. interaction mode 결정
+5. fallback 카드로 자연스러운 하향
 
-1. URL을 입력받아 preview 후보 정보를 추출할 수 있어야 한다
-2. 정적 렌더링과 동적 렌더링을 모두 지원해야 한다
-3. URL의 provider / resource type / page kind를 분류할 수 있어야 한다
-4. 최종적으로 일관된 preview card object를 반환해야 한다
-5. 카드가 화면에서 단순 표시뿐 아니라 일부 인터랙션까지 가능하도록 힌트를 제공해야 한다
+## 판단 축
 
-## 핵심 가치
+1. Provider: `youtube | vimeo | instagram | medium | naver-blog | generic | unknown`
+2. Resource Type: `video | social | article | image | audio | website | unknown`
+3. Page Kind: `atomic | homepage | collection | profile | unknown`
+4. Interaction Capability: `static | expandable | playable | embeddable`
 
-### 1) 링크를 주소가 아닌 객체로 본다
+## 설계 원칙
 
-이 프로젝트는 URL을 단순 문자열이 아니라, **의미를 가진 콘텐츠 객체**로 본다.
+1. 모든 URL을 embed하려고 하지 않는다.
+2. embed 가능성은 metadata 존재 여부가 아니라 정책/패턴/렌더 가능성까지 포함한 판단 결과다.
+3. rich interaction은 atomic resource에 우선 제공한다.
+4. 산출물은 UI 데이터가 아니라 render contract다.
 
-### 2) 리소스 타입별로 다르게 다룬다
+## MVP 우선순위
 
-같은 도메인이라도:
+1순위:
 
-- 개별 영상
-- 프로필
-- 홈
-- 컬렉션
-
-은 다른 카드가 되어야 한다.
-
-### 3) 엔진 중심 프로젝트다
-
-지금 만드는 것은 서비스 자체가 아니라, **향후 서비스들이 공통으로 사용할 preview engine package**다.
-
-### 4) 카드 안에서 일부 상호작용까지 가능해야 한다
-
-최종적으로는 카드가 단순 정적 데이터 덩어리가 아니라, 유형에 따라 다음과 같은 동작이 가능해야 한다:
-
-- 영상 재생
-- 요약 펼치기
-- 이미지 확대
-- 임베드 렌더링
-- 원문 이동
-
-## 제품 범위
-
-### 포함
-
-- URL 정규화
-- HTTP 응답 확인
-- HTML 기반 정보 추출
-- 동적 렌더링 결과 해석
-- provider 판별
-- resource type / page kind 분류
-- 카드 객체 정규화
-- 렌더링 및 인터랙션 힌트 제공
-
-### 제외
-
-- 로그인 / 회원가입
-- 아카이브 서비스 UI
-- 피드 서비스 UI
-- 결제 / 수익화
-- 모든 사이트 완벽 지원
-- 원본 웹페이지 전체 복제
-- 정책 우회 렌더링
-
-## MVP 범위
-
-### 1차 지원 플랫폼
-
-**Video**
 - YouTube
+- 일반 article/blog
+- direct image URL
 
-**Social**
+2순위:
+
 - Instagram
+- Vimeo
+- direct audio URL
 
-**Blog / Article**
-- 네이버 블로그
-- 티스토리
-- 브런치
-- Velog
-- Medium
-- 일반 블로그 / 기사 페이지
+3순위:
 
-**Generic**
-- 일반 웹사이트 fallback
+- generic homepage/profile/collection fallback 강화
 
-### 지원할 카드 유형
+## 최종 산출물
 
-- `video`
-- `social`
-- `article`
-- `website`
-- `homepage`
-- `collection`
-- `profile`
-- `unknown`
+반환 객체에는 최소 아래가 항상 있어야 한다.
 
-## 카드가 제공해야 하는 경험
-
-카드는 단순한 preview가 아니라, 화면에서 **"미니 웹페이지처럼"** 보여야 한다.
-
-### 카드 기본 요소
-
-- 제목
-- 설명
-- 대표 이미지
-- 작성자
-- 게시일
-- provider
-- resource type
-
-### 카드 확장 요소
-
-- 영상 재생
-- 이미지 확대
-- 요약 펼치기
-- embed 가능 여부
-- 원문 이동
-
-## 인터랙션 수준 정의
-
-### 1. Static
-
-기본 정보만 보여주고 클릭 가능
-
-### 2. Expandable
-
-카드 안에서 더 많은 정보 펼치기 가능
-
-### 3. Playable
-
-영상/오디오 등 재생 가능
-
-### 4. Embeddable
-
-iframe 또는 provider 기반 embed 가능
-
-## 성공 기준
-
-MVP에서의 성공은 "모든 웹페이지를 완벽하게 지원"이 아니다.
-
-다음이 성공 기준이다:
-
-1. 주요 URL 타입을 안정적으로 분류할 수 있다
-2. 정적 추출과 동적 추출이 모두 동작한다
-3. 카드 객체가 일관된 구조를 가진다
-4. 화면에서 카드 기반 preview UI를 구성할 수 있다
-5. 일부 카드에서 기본적인 상호작용이 가능하다
-
-## 향후 활용 가능성
-
-이 엔진 패키지는 앞으로 다음과 같은 시스템의 핵심이 될 수 있다:
-
-- 개인 URL 아카이브 서비스
-- SNS/피드형 링크 공유 서비스
-- 북마크 시각화 도구
-- Smart Preview API
-- 브라우저 확장 프로그램
-- 외부 임베드용 preview widget
+- `provider`
+- `resourceType`
+- `pageKind`
+- `embeddable`
+- `playable`
+- `interactionMode`
