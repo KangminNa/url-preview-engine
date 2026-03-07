@@ -103,13 +103,22 @@ export const extractWithPlaywright = async (
     await waitForNetworkSettled(page, Math.min(4_000, timeoutMs))
     await autoScroll(page, maxScrollSteps, scrollDelayMs)
     await waitForNetworkSettled(page, Math.min(2_000, timeoutMs))
-    await waitForMeaningfulRoot(page, Math.min(5_000, timeoutMs))
+    await waitForMeaningfulRoot(
+      page,
+      Math.min(5_000, timeoutMs),
+      options.mainSelectors,
+    )
 
     const resolvedUrl = page.url() || url
     const renderedHtml = await page.content()
     const renderedMetadata = await extractStaticMetadata(renderedHtml, resolvedUrl)
-    const domTree = await extractDomTree(page)
-    const titleHint = renderedMetadata.title
+    const titleHint = options.titleHint ?? renderedMetadata.title
+    const domTree = await extractDomTree(page, {
+      titleHint,
+      focusTitleNearestBody: options.focusTitleNearestBody ?? false,
+      mainSelectors: options.mainSelectors,
+      removeSelectors: options.removeSelectors,
+    })
 
     const recomposedFromDom = domTree
       ? recomposeReaderContentFromTree(domTree, resolvedUrl, {
@@ -122,6 +131,9 @@ export const extractWithPlaywright = async (
           maxTextLength: MAX_DYNAMIC_TEXT_LENGTH,
           maxBlocks: MAX_DYNAMIC_BLOCKS,
           minTextLength: 80,
+          noiseKeywords: options.noiseKeywords,
+          mainKeywords: options.mainKeywords,
+          dropTags: options.dropTags,
         })
       : undefined
 
@@ -137,6 +149,9 @@ export const extractWithPlaywright = async (
         maxTextLength: MAX_DYNAMIC_TEXT_LENGTH,
         maxBlocks: MAX_DYNAMIC_BLOCKS,
         minTextLength: 80,
+        noiseKeywords: options.noiseKeywords,
+        mainKeywords: options.mainKeywords,
+        dropTags: options.dropTags,
       })
 
     if (!recomposedContent) {
@@ -218,6 +233,7 @@ const autoScroll = async (
 const waitForMeaningfulRoot = async (
   page: PlaywrightPage,
   timeoutMs: number,
+  focusSelectors: string[] | undefined,
 ): Promise<void> => {
   try {
     await page.evaluate(
@@ -255,7 +271,7 @@ const waitForMeaningfulRoot = async (
       },
       {
         timeout: timeoutMs,
-        selectors: DEFAULT_FOCUSED_SELECTORS,
+        selectors: focusSelectors ?? DEFAULT_FOCUSED_SELECTORS,
       },
     )
   } catch {
@@ -265,10 +281,23 @@ const waitForMeaningfulRoot = async (
 
 const extractDomTree = async (
   page: PlaywrightPage,
+  options: {
+    titleHint?: string
+    focusTitleNearestBody: boolean
+    mainSelectors?: string[]
+    removeSelectors?: string[]
+  },
 ): Promise<ReaderTreeNode[] | undefined> => {
   try {
     const tree = await page.evaluate(
-      ({ maxNodes, maxDepth }) => {
+      ({
+        maxNodes,
+        maxDepth,
+        titleHint,
+        focusTitleNearestBody,
+        mainSelectors,
+        removeSelectors,
+      }) => {
         type DomTreeNode = {
           kind: 'text' | 'element'
           text?: string
@@ -284,7 +313,6 @@ const extractDomTree = async (
           'template',
           'svg',
           'canvas',
-          'iframe',
           'object',
           'embed',
           'head',
@@ -299,11 +327,20 @@ const extractDomTree = async (
           'href',
           'src',
           'data-src',
+          'poster',
           'alt',
           'width',
           'height',
           'loading',
           'decoding',
+          'controls',
+          'autoplay',
+          'muted',
+          'loop',
+          'playsinline',
+          'allow',
+          'allowfullscreen',
+          'referrerpolicy',
         ])
 
         const normalize = (value: string | null | undefined): string => {
@@ -312,6 +349,64 @@ const extractDomTree = async (
           }
 
           return value.replace(/\s+/g, ' ').trim()
+        }
+
+        const normalizeForMatch = (value: string | null | undefined): string => {
+          return normalize(value)
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+        }
+
+        const buildTitleCandidates = (value: string | undefined): string[] => {
+          const normalized = normalizeForMatch(value)
+          if (!normalized) {
+            return []
+          }
+
+          const parts = (value ?? '')
+            .split(/\s*(?:\||-|:|·|•|›|»)\s*/g)
+            .map((part) => normalizeForMatch(part))
+            .filter((part) => part.length >= 2)
+
+          return Array.from(new Set([normalized, ...parts])).slice(0, 6)
+        }
+
+        const scoreTitleMatch = (text: string, candidates: string[]): number => {
+          const normalizedText = normalizeForMatch(text)
+          if (!normalizedText || candidates.length === 0) {
+            return 0
+          }
+
+          let best = 0
+          for (const candidate of candidates) {
+            if (!candidate) {
+              continue
+            }
+
+            if (normalizedText === candidate) {
+              best = Math.max(best, 1)
+              continue
+            }
+
+            if (normalizedText.includes(candidate)) {
+              best = Math.max(best, 0.85)
+              continue
+            }
+
+            const tokens = candidate.split(' ').filter((token) => token.length >= 2)
+            if (tokens.length === 0) {
+              continue
+            }
+
+            const matched = tokens.filter((token) =>
+              normalizedText.includes(token),
+            ).length
+            best = Math.max(best, matched / tokens.length)
+          }
+
+          return best
         }
 
         const toAbsolute = (raw: string): string | undefined => {
@@ -363,6 +458,133 @@ const extractDomTree = async (
 
         let nodeCount = 0
 
+        const shouldRemoveElement = (element: Element): boolean => {
+          if (!removeSelectors || removeSelectors.length === 0) {
+            return false
+          }
+
+          for (const selector of removeSelectors) {
+            if (!selector) {
+              continue
+            }
+
+            try {
+              if (element.matches(selector)) {
+                return true
+              }
+            } catch {
+              // Ignore invalid selectors from user policy.
+            }
+          }
+
+          return false
+        }
+
+        const resolveSelectorRoots = (): Element[] => {
+          if (!mainSelectors || mainSelectors.length === 0) {
+            return []
+          }
+
+          let bestRoot: Element | undefined
+          let bestScore = 0
+          const seen = new Set<Element>()
+
+          for (const selector of mainSelectors) {
+            if (!selector) {
+              continue
+            }
+
+            let matches: Element[] = []
+            try {
+              matches = Array.from(document.querySelectorAll(selector))
+            } catch {
+              continue
+            }
+
+            for (const element of matches) {
+              if (seen.has(element) || shouldRemoveElement(element)) {
+                continue
+              }
+
+              seen.add(element)
+              const textLength = normalize(element.textContent).length
+              const childCount = element.querySelectorAll('*').length
+              const score = textLength + childCount * 2
+              if (score > bestScore) {
+                bestScore = score
+                bestRoot = element
+              }
+            }
+          }
+
+          return bestRoot ? [bestRoot] : []
+        }
+
+        const resolveTitleAnchorRoot = (): Element | undefined => {
+          if (!focusTitleNearestBody || !titleHint) {
+            return undefined
+          }
+
+          const titleCandidates = buildTitleCandidates(titleHint)
+          if (titleCandidates.length === 0) {
+            return undefined
+          }
+
+          let bestElement: Element | undefined
+          let bestScore = 0
+          let bestTextLength = Number.POSITIVE_INFINITY
+
+          const elements = Array.from(document.body?.querySelectorAll('*') ?? [])
+          for (const element of elements) {
+            const tagName = element.tagName.toLowerCase()
+            if (
+              tagName === 'script' ||
+              tagName === 'style' ||
+              tagName === 'noscript' ||
+              tagName === 'template'
+            ) {
+              continue
+            }
+
+            const text = normalize(element.textContent)
+            if (!text || text.length > 180) {
+              continue
+            }
+
+            const score = scoreTitleMatch(text, titleCandidates)
+            if (score < 0.72) {
+              continue
+            }
+
+            if (score > bestScore) {
+              bestScore = score
+              bestTextLength = text.length
+              bestElement = element
+              continue
+            }
+
+            if (score === bestScore && text.length < bestTextLength) {
+              bestTextLength = text.length
+              bestElement = element
+            }
+          }
+
+          if (!bestElement) {
+            return undefined
+          }
+
+          let anchor: Element = bestElement
+          while (anchor.parentElement && anchor.parentElement !== document.body) {
+            anchor = anchor.parentElement
+          }
+
+          if (anchor.parentElement === document.body) {
+            return anchor
+          }
+
+          return undefined
+        }
+
         const walk = (node: Node, depth: number): DomTreeNode | undefined => {
           if (nodeCount >= maxNodes || depth > maxDepth) {
             return undefined
@@ -387,7 +609,7 @@ const extractDomTree = async (
 
           const element = node as HTMLElement
           const tagName = element.tagName.toLowerCase()
-          if (dropTags.has(tagName)) {
+          if (dropTags.has(tagName) || shouldRemoveElement(element)) {
             return undefined
           }
 
@@ -411,10 +633,14 @@ const extractDomTree = async (
               continue
             }
 
-            if (name === 'src' || name === 'data-src') {
+            if (name === 'src' || name === 'data-src' || name === 'poster') {
               const src = sanitizeMedia(value)
               if (src) {
-                attrs.src = src
+                if (name === 'poster') {
+                  attrs.poster = src
+                } else {
+                  attrs.src = src
+                }
               }
               continue
             }
@@ -448,8 +674,17 @@ const extractDomTree = async (
           return [] as DomTreeNode[]
         }
 
+        const selectorRoots = resolveSelectorRoots()
+        const rootAnchor = resolveTitleAnchorRoot()
+        const rootNodes =
+          selectorRoots.length > 0
+            ? selectorRoots
+            : rootAnchor
+              ? [rootAnchor]
+              : Array.from(body.childNodes)
+
         const output: DomTreeNode[] = []
-        for (const child of Array.from(body.childNodes)) {
+        for (const child of rootNodes) {
           const next = walk(child, 1)
           if (next) {
             output.push(next)
@@ -461,6 +696,10 @@ const extractDomTree = async (
       {
         maxNodes: DEFAULT_MAX_DOM_NODES,
         maxDepth: DEFAULT_MAX_DOM_DEPTH,
+        titleHint: options.titleHint,
+        focusTitleNearestBody: options.focusTitleNearestBody,
+        mainSelectors: options.mainSelectors ?? [],
+        removeSelectors: options.removeSelectors ?? [],
       },
     )
 

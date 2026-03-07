@@ -167,4 +167,61 @@ describe('content recomposer', () => {
     expect(content?.text).toContain('실제 본문 문단입니다')
     expect(content?.text).not.toContain('카테고리')
   })
+
+  it('rebuilds blocks with iframe/video and emits render document assets', () => {
+    const html = `<!doctype html>
+      <html>
+        <body>
+          <main>
+            <h1>미리보기 문서</h1>
+            <p>본문 텍스트</p>
+            <video src="/videos/sample.mp4" poster="/images/poster.jpg" controls></video>
+            <iframe src="https://player.example.com/embed/abc" title="샘플 플레이어"></iframe>
+          </main>
+        </body>
+      </html>`
+
+    const content = recomposeReaderContent(html, 'https://example.com/post', {
+      source: 'static-html',
+      captureMode: 'full-body',
+      minTextLength: 5,
+    })
+
+    expect(content).toBeDefined()
+    expect(content?.blocks?.some((block) => block.type === 'video')).toBe(true)
+    expect(content?.blocks?.some((block) => block.type === 'iframe')).toBe(true)
+    expect(content?.html).toContain('<video')
+    expect(content?.html).toContain('<iframe')
+    expect(content?.quality?.score).toBeGreaterThan(0)
+    expect(content?.renderDocument?.indexHtml).toContain('preview.css')
+    expect(content?.renderDocument?.css).toContain('.preview-root')
+  })
+
+  it('filters noisy subtree with site-tuned noise/main hints', () => {
+    const html = `<!doctype html>
+      <html>
+        <body>
+          <section class="sidebar-ranking">
+            <h3>추천 글</h3>
+            <p>사이드바 추천 컨텐츠입니다.</p>
+          </section>
+          <section class="content-main">
+            <h1>핵심 본문</h1>
+            <p>사용자가 실제로 보고 싶은 본문 데이터입니다.</p>
+          </section>
+        </body>
+      </html>`
+
+    const content = recomposeReaderContent(html, 'https://example.com/post', {
+      source: 'static-html',
+      captureMode: 'full-body',
+      minTextLength: 5,
+      noiseKeywords: ['sidebar', 'ranking', '추천'],
+      mainKeywords: ['content', '본문'],
+    })
+
+    expect(content).toBeDefined()
+    expect(content?.text).toContain('핵심 본문')
+    expect(content?.text).not.toContain('사이드바 추천')
+  })
 })

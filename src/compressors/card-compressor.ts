@@ -130,11 +130,14 @@ export const compressCard = (card: PreviewCard): PreviewCard => {
   if (compressed.content) {
     const textLimit = 120_000
     const htmlLimit = 180_000
+    const documentHtmlLimit = 220_000
+    const documentCssLimit = 32_000
     const blockLimit = 1_500
     const treeNodeLimit = 2_000
     const originalText = compressed.content.text
     const originalHtml = compressed.content.html
     const originalBlocks = compressed.content.blocks
+    const originalDocument = compressed.content.renderDocument
     const treeResult = trimTree(compressed.content.tree, treeNodeLimit)
     const blocks = originalBlocks?.slice(0, blockLimit)
 
@@ -143,12 +146,21 @@ export const compressCard = (card: PreviewCard): PreviewCard => {
       text: clamp(originalText, textLimit) ?? '',
       html: clampRaw(originalHtml, htmlLimit) ?? '',
       blocks,
+      renderDocument: originalDocument
+        ? {
+            indexHtml:
+              clampRaw(originalDocument.indexHtml, documentHtmlLimit) ?? '',
+            css: clampRaw(originalDocument.css, documentCssLimit) ?? '',
+          }
+        : undefined,
       tree: treeResult.tree,
       treeNodeCount: treeResult.nodeCount,
       truncated:
         compressed.content.truncated ||
         (originalText?.trim().length ?? 0) > textLimit ||
         (originalHtml?.length ?? 0) > htmlLimit ||
+        (originalDocument?.indexHtml.length ?? 0) > documentHtmlLimit ||
+        (originalDocument?.css.length ?? 0) > documentCssLimit ||
         (originalBlocks?.length ?? 0) > blockLimit ||
         treeResult.truncated,
     }

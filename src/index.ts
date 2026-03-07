@@ -1,4 +1,12 @@
 export { preview } from './core/preview-engine'
+export { SitePolicy, YouTubeSitePolicy, NaverMapSitePolicy } from './policies'
+export {
+  ContentProfile,
+  ContentProfileRegistry,
+  createContentProfileRegistry,
+  YouTubeContentProfile,
+  NaverMapContentProfile,
+} from './content'
 
 export type {
   AudioCard,
@@ -16,3 +24,7 @@ export type {
   ResourceType,
 } from './types/classification'
 export type { PreviewOptions } from './types/metadata'
+export type {
+  ContentExtractionRules,
+  ContentProfileMatchInput,
+} from './content'

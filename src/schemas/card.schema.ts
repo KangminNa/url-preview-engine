@@ -60,6 +60,22 @@ export const ReaderContentSchema = z.object({
   text: z.string(),
   blockCount: z.number().int().nonnegative(),
   truncated: z.boolean(),
+  quality: z
+    .object({
+      score: z.number().min(0).max(100),
+      grade: z.enum(['poor', 'fair', 'good', 'excellent']),
+      signals: z.object({
+        textLength: z.number().int().nonnegative(),
+        blockCount: z.number().int().nonnegative(),
+        mediaCount: z.number().int().nonnegative(),
+        treeNodeCount: z.number().int().nonnegative().optional(),
+        titleSimilarity: z.number().min(0).max(1),
+        noiseRatio: z.number().min(0).max(1),
+        mainKeywordHits: z.number().int().nonnegative(),
+        truncated: z.boolean(),
+      }),
+    })
+    .optional(),
   blocks: z
     .array(
       z.union([
@@ -72,8 +88,24 @@ export const ReaderContentSchema = z.object({
           src: z.string().url(),
           alt: z.string().optional(),
         }),
+        z.object({
+          type: z.literal('video'),
+          src: z.string().url(),
+          poster: z.string().url().optional(),
+        }),
+        z.object({
+          type: z.literal('iframe'),
+          src: z.string().url(),
+          title: z.string().optional(),
+        }),
       ]),
     )
+    .optional(),
+  renderDocument: z
+    .object({
+      indexHtml: z.string(),
+      css: z.string(),
+    })
     .optional(),
   tree: z.array(ReaderTreeNodeSchema).optional(),
   treeNodeCount: z.number().int().nonnegative().optional(),

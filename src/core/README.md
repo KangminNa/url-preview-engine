@@ -14,4 +14,6 @@
 ## 설계 포인트
 
 - 네트워크/추출/분류/판단/정규화를 한곳에서 순서 보장
+- `ContentProfileRegistry` + `SitePolicyRegistry`를 조합해
+  추출 전략과 capability 보정 책임을 분리
 - 기능 모듈은 작게 분리하고 Core는 조합에 집중

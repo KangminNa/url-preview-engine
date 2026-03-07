@@ -6,6 +6,8 @@
 
 - URL의 provider / resource type / page kind 판별
 - embed / playback capability 판별
+- 사이트별 main-content 추출 전략 적용
+- 추출 품질 점수 기반으로 더 나은 콘텐츠 선택
 - UI가 바로 소비할 수 있는 render contract 반환
 
 ## One-liner
@@ -91,7 +93,11 @@ const card = await preview('https://www.youtube.com/watch?v=abc123')
     html: '<h1>...</h1><p>...</p>',
     text: '본문 텍스트 ...',
     blockCount: 24,
-    truncated: false
+    truncated: false,
+    quality: {
+      score: 82,
+      grade: 'excellent'
+    }
   }
 }
 ```
@@ -119,6 +125,8 @@ URL Input
   -> HTTP Fetch
   -> Static Extract
   -> Dynamic Extract (optional)
+  -> Content Profile Resolve (site-specific extraction strategy)
+  -> Content Quality Evaluate / Better-content select
   -> Provider Classify
   -> ResourceType Classify
   -> PageKind Classify
@@ -134,6 +142,7 @@ URL Input
 ```text
 src/
   core/
+  content/
   fetchers/
   extractors/
   classifiers/
@@ -150,6 +159,74 @@ src/
 - `capabilities/embed-capability-detector.ts`
 - `capabilities/playback-capability-detector.ts`
 - `capabilities/interaction-mode-resolver.ts`
+- `content/content-profile.ts`
+- `content/content-profile-registry.ts`
+- `content/content-quality-evaluator.ts`
+
+## Design Patterns
+
+- `Template Method`: `SitePolicy` 훅으로 분류/능력/카드 보정
+- `Strategy`: `ContentProfile`로 사이트별 본문 추출 규칙 주입
+- `Chain of Responsibility`: `ContentProfileRegistry`가 우선순위대로 규칙 병합
+
+## Package Structure
+
+```text
+core/
+  preview-engine.ts          # 전체 파이프라인 오케스트레이션
+content/
+  content-profile.ts         # 사이트별 추출 전략 계약(Strategy)
+  builtin-content-profiles.ts
+  content-profile-registry.ts
+  content-quality-evaluator.ts
+extractors/
+  static.extractor.ts        # 정적 HTML 추출
+  playwright.extractor.ts    # 동적 DOM 추출
+  content-recomposer.ts      # tree -> blocks/html/renderDocument + quality
+policies/
+  site-policy.ts             # 사이트별 capability/classification 보정
+view/
+  default-view-engine.ts     # blocks -> index.html/css 렌더
+```
+
+## 더 디테일한 Preview를 얻는 방법
+
+1. `contentProfiles`로 사이트별 규칙 추가
+2. `mainSelectors/removeSelectors`로 본문 루트와 노이즈 영역 명시
+3. `mainKeywords/noiseKeywords/dropTags`로 본문/잡음 점수 튜닝
+4. `dynamicFallback: true` 유지해 정적 실패 시 동적 DOM 보강
+5. `card.content.quality`를 보고 UI에서 low-score fallback 처리
+
+예시:
+
+```ts
+import { ContentProfile, preview } from 'url-preview-engine'
+
+class BlogProfile extends ContentProfile {
+  constructor() {
+    super('blog-profile', 300)
+  }
+
+  matches({ provider }) {
+    return provider === 'example'
+  }
+
+  resolveRules() {
+    return {
+      mainSelectors: ['main article', '#content'],
+      removeSelectors: ['header', 'footer', '.related', '.ad'],
+      mainKeywords: ['본문', 'article', 'content'],
+      noiseKeywords: ['추천', '광고', 'ranking', 'sidebar'],
+      dropTags: ['nav', 'aside'],
+    }
+  }
+}
+
+const card = await preview('https://example.com/post/1', {
+  contentProfiles: [new BlogProfile()],
+  dynamicFallback: true,
+})
+```
 
 ## Non-goals
 
@@ -172,6 +249,8 @@ npm run demo
 ```
 
 브라우저에서 `http://localhost:4173` 접속 후 URL을 입력하면, 카드 렌더링 결과와 raw JSON을 동시에 확인할 수 있습니다.
+
+데모에는 오픈소스(`metascraper`, `open-graph-scraper`, `link-preview-js`) 비교 패널도 포함되어 있습니다.
 
 ## Testing
 

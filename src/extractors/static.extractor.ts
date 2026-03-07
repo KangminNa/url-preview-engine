@@ -1,5 +1,6 @@
 import type {
   ContentSnapshot,
+  DynamicExtractorOptions,
   ExtractedMetadata,
   ReaderContent,
 } from '../types/metadata'
@@ -154,14 +155,129 @@ const matchOEmbedUrl = (html: string, baseUrl: string): string | undefined => {
   return resolveRelativeUrl(href, baseUrl)
 }
 
-const fallbackExtract = (html: string, url: string): ExtractedMetadata => {
+const readTagAttribute = (
+  tag: string,
+  attribute: string,
+): string | undefined => {
+  const pattern = new RegExp(
+    `${attribute}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>"']+))`,
+    'i',
+  )
+  const match = pattern.exec(tag)
+  return normalizeText(match?.[1] ?? match?.[2] ?? match?.[3])
+}
+
+const normalizeMatchText = (value: string | undefined): string | undefined => {
+  const normalized = normalizeText(value)
+  if (!normalized) {
+    return undefined
+  }
+
+  return normalized
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const buildTitleCandidates = (title: string | undefined): string[] => {
+  const base = normalizeMatchText(title)
+  if (!base) {
+    return []
+  }
+
+  const parts = title
+    ?.split(/\s*(?:\||-|:|·|•|›|»)\s*/g)
+    .map((part) => normalizeMatchText(part))
+    .filter((part): part is string => Boolean(part && part.length >= 2))
+
+  return Array.from(new Set([base, ...(parts ?? [])])).slice(0, 6)
+}
+
+const scoreTitleSimilarity = (
+  iframeTitle: string | undefined,
+  titleCandidates: string[],
+): number => {
+  const target = normalizeMatchText(iframeTitle)
+  if (!target || titleCandidates.length === 0) {
+    return 0
+  }
+
+  let best = 0
+  for (const candidate of titleCandidates) {
+    if (target.includes(candidate)) {
+      best = Math.max(best, 1)
+      continue
+    }
+
+    const tokens = candidate.split(' ').filter((token) => token.length >= 2)
+    if (tokens.length === 0) {
+      continue
+    }
+
+    const matched = tokens.filter((token) => target.includes(token)).length
+    best = Math.max(best, matched / tokens.length)
+  }
+
+  return best
+}
+
+const matchIframePlayerUrl = (
+  html: string,
+  baseUrl: string,
+  titleHint?: string,
+): string | undefined => {
+  const titleCandidates = buildTitleCandidates(titleHint)
+  const iframes = Array.from(html.matchAll(/<iframe\b[^>]*>/gi))
+  if (iframes.length === 0) {
+    return undefined
+  }
+
+  let bestUrl: string | undefined
+  let bestScore = 0
+
+  for (const match of iframes) {
+    const tag = match[0]
+    const src = resolveRelativeUrl(readTagAttribute(tag, 'src'), baseUrl)
+    if (!src) {
+      continue
+    }
+
+    if (titleCandidates.length === 0) {
+      return src
+    }
+
+    const iframeTitle = readTagAttribute(tag, 'title')
+    const score = scoreTitleSimilarity(iframeTitle, titleCandidates)
+    if (score > bestScore) {
+      bestScore = score
+      bestUrl = src
+    }
+  }
+
+  if (bestUrl && bestScore >= 0.5) {
+    return bestUrl
+  }
+
+  return undefined
+}
+
+const fallbackExtract = (
+  html: string,
+  url: string,
+  options: DynamicExtractorOptions = {},
+): ExtractedMetadata => {
   const fallbackTitle = matchTitle(html)
+  const iframePlayerUrl = matchIframePlayerUrl(html, url, fallbackTitle)
   const readerContent = recomposeReaderContent(html, url, {
     source: 'static-html',
     captureMode: 'focused-body',
     focusMainContent: true,
     focusTitleRoot: true,
     titleHint: fallbackTitle,
+    noiseKeywords: options.noiseKeywords,
+    mainKeywords: options.mainKeywords,
+    dropTags: options.dropTags,
   })
 
   const description =
@@ -191,7 +307,8 @@ const fallbackExtract = (html: string, url: string): ExtractedMetadata => {
       matchMetaTag(html, 'twitter:player') ??
       matchMetaTag(html, 'og:video') ??
       matchMetaTag(html, 'og:video:url') ??
-      matchMetaTag(html, 'og:video:secure_url'),
+      matchMetaTag(html, 'og:video:secure_url') ??
+      iframePlayerUrl,
     snapshot: buildSnapshot(html, url, readerContent),
     content: readerContent,
   }
@@ -253,10 +370,11 @@ const mergeMetadata = (
 export const extractStaticMetadata = async (
   html: string,
   url: string,
+  options: DynamicExtractorOptions = {},
 ): Promise<ExtractedMetadata> => {
   const [metascraperMetadata, fallbackMetadata] = await Promise.all([
     extractWithMetascraper(html, url),
-    Promise.resolve(fallbackExtract(html, url)),
+    Promise.resolve(fallbackExtract(html, url, options)),
   ])
 
   return mergeMetadata(metascraperMetadata, fallbackMetadata)

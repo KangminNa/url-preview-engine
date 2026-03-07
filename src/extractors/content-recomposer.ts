@@ -3,6 +3,8 @@ import type {
   ReaderContent,
   ReaderTreeNode,
 } from '../types/metadata'
+import { evaluateReaderContentQuality } from '../content/content-quality-evaluator'
+import { createDefaultViewEngine } from '../view/default-view-engine'
 
 type AttributeValue = string | true
 type InternalNode = InternalElementNode | InternalTextNode
@@ -30,6 +32,7 @@ interface RenderOptions {
   maxHtmlLength: number
   maxTextLength: number
   minTextLength: number
+  titleHint?: string
 }
 
 interface RenderResult {
@@ -38,6 +41,7 @@ interface RenderResult {
   blockCount: number
   truncated: boolean
   blocks: ReaderBlock[]
+  renderDocument: ReaderContent['renderDocument']
 }
 
 interface FocusStats {
@@ -58,6 +62,12 @@ interface TitleAnchorCandidate {
   score: number
 }
 
+interface NoiseControl {
+  noiseKeywords: string[]
+  mainKeywords: string[]
+  dropTags: Set<string>
+}
+
 export interface RecomposeOptions {
   source?: ReaderContent['source']
   captureMode?: ReaderContent['captureMode']
@@ -70,6 +80,9 @@ export interface RecomposeOptions {
   focusThreshold?: number
   focusTitleRoot?: boolean
   titleHint?: string
+  noiseKeywords?: string[]
+  mainKeywords?: string[]
+  dropTags?: string[]
 }
 
 const DEFAULT_MAX_BLOCKS = 900
@@ -103,7 +116,6 @@ const DROP_TAGS = new Set([
   'template',
   'svg',
   'canvas',
-  'iframe',
   'object',
   'embed',
   'head',
@@ -124,6 +136,16 @@ const GLOBAL_ALLOWED_ATTRS = new Set([
 const ATTRS_BY_TAG: Record<string, Set<string>> = {
   a: new Set(['href']),
   img: new Set(['src', 'data-src', 'alt', 'width', 'height', 'loading', 'decoding']),
+  video: new Set(['src', 'poster', 'controls', 'autoplay', 'muted', 'loop', 'playsinline']),
+  audio: new Set(['src', 'controls', 'autoplay', 'muted', 'loop']),
+  iframe: new Set([
+    'src',
+    'title',
+    'loading',
+    'allow',
+    'allowfullscreen',
+    'referrerpolicy',
+  ]),
   source: new Set(['src', 'type', 'media']),
   picture: new Set(['src']),
 }
@@ -147,6 +169,9 @@ const BLOCK_BREAK_TAGS = new Set([
   'tr',
   'td',
   'th',
+  'video',
+  'audio',
+  'iframe',
 ])
 
 const FOCUSABLE_TAGS = new Set(['main', 'article', 'section', 'div'])
@@ -170,6 +195,41 @@ const ENTITY_MAP: Record<string, string> = {
 }
 
 const TITLE_SPLIT_PATTERN = /\s*(?:\||-|:|·|•|›|»)\s*/g
+const defaultViewEngine = createDefaultViewEngine()
+const DEFAULT_DROP_TAGS = new Set(['nav', 'aside', 'footer'])
+const DEFAULT_NOISE_KEYWORDS = [
+  'nav',
+  'menu',
+  'footer',
+  'sidebar',
+  'banner',
+  'advert',
+  'ad-',
+  'promo',
+  'recommend',
+  'related',
+  'ranking',
+  'gnb',
+  'lnb',
+  'snb',
+  '댓글',
+  '인기',
+  '추천',
+  '광고',
+]
+const DEFAULT_MAIN_KEYWORDS = [
+  'content',
+  'article',
+  'post',
+  'story',
+  'detail',
+  'viewer',
+  'read',
+  'doc',
+  '본문',
+  '콘텐츠',
+  '내용',
+]
 
 const emptyFocusStats = (): FocusStats => ({
   textLength: 0,
@@ -195,6 +255,53 @@ const normalizeMatchText = (value: string | undefined | null): string => {
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+const normalizeKeyword = (value: string | undefined | null): string | undefined => {
+  if (!value) {
+    return undefined
+  }
+
+  const normalized = value.toLowerCase().trim()
+  return normalized.length > 1 ? normalized : undefined
+}
+
+const mergeKeywords = (base: string[], extra: string[] | undefined): string[] => {
+  const normalized = extra
+    ?.map((keyword) => normalizeKeyword(keyword))
+    .filter((keyword): keyword is string => Boolean(keyword))
+
+  if (!normalized || normalized.length === 0) {
+    return base
+  }
+
+  return Array.from(new Set([...base, ...normalized]))
+}
+
+const buildNoiseControl = (options: RecomposeOptions): NoiseControl => {
+  const dropTags = new Set(
+    (options.dropTags ?? [])
+      .map((tag) => normalizeKeyword(tag))
+      .filter((tag): tag is string => Boolean(tag)),
+  )
+
+  for (const tag of DEFAULT_DROP_TAGS) {
+    dropTags.add(tag)
+  }
+
+  return {
+    noiseKeywords: mergeKeywords(DEFAULT_NOISE_KEYWORDS, options.noiseKeywords),
+    mainKeywords: mergeKeywords(DEFAULT_MAIN_KEYWORDS, options.mainKeywords),
+    dropTags,
+  }
+}
+
+const includesKeyword = (text: string, keywords: string[]): boolean => {
+  if (!text) {
+    return false
+  }
+
+  return keywords.some((keyword) => text.includes(keyword))
 }
 
 const buildTitleCandidates = (titleHint: string): string[] => {
@@ -286,21 +393,6 @@ const normalizeText = (value: string | undefined | null): string | undefined => 
 
   const normalized = decodeHtmlEntities(value).replace(/\s+/g, ' ').trim()
   return normalized.length > 0 ? normalized : undefined
-}
-
-const escapeHtml = (value: string): string => {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-}
-
-const escapeAttribute = (value: string): string => {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
 }
 
 const resolveRelativeUrl = (
@@ -503,10 +595,14 @@ const sanitizeAttributes = (
       continue
     }
 
-    if (name === 'src' || name === 'data-src') {
+    if (name === 'src' || name === 'data-src' || name === 'poster') {
       const src = sanitizeMediaSource(value, baseUrl)
       if (src) {
-        sanitized.src = src
+        if (name === 'poster') {
+          sanitized.poster = src
+        } else {
+          sanitized.src = src
+        }
       }
       continue
     }
@@ -535,6 +631,10 @@ const sanitizeInternalNode = (node: InternalNode, baseUrl: string): InternalNode
 
   const attrs = sanitizeAttributes(tagName, node.attrs, baseUrl)
   if (tagName === 'img' && typeof attrs.src !== 'string') {
+    return []
+  }
+
+  if (tagName === 'iframe' && typeof attrs.src !== 'string') {
     return []
   }
 
@@ -661,6 +761,21 @@ const readStringAttr = (
   return typeof value === 'string' ? value : undefined
 }
 
+const readSourceFromChild = (node: InternalElementNode): string | undefined => {
+  for (const child of node.children) {
+    if (child.kind !== 'element' || child.tagName !== 'source') {
+      continue
+    }
+
+    const source = readStringAttr(child.attrs, 'src')
+    if (source) {
+      return source
+    }
+  }
+
+  return undefined
+}
+
 const readHintText = (node: InternalElementNode): string => {
   const id = readStringAttr(node.attrs, 'id')
   const className = readStringAttr(node.attrs, 'class')
@@ -731,6 +846,39 @@ const analyzeFocusStats = (node: InternalNode, inLink: boolean): FocusStats => {
   return stats
 }
 
+const isLikelyNoiseNode = (
+  node: InternalElementNode,
+  stats: FocusStats,
+  noiseControl: NoiseControl,
+): boolean => {
+  if (noiseControl.dropTags.has(node.tagName)) {
+    return true
+  }
+
+  const hint = readHintText(node)
+  const hasMainHint = includesKeyword(hint, noiseControl.mainKeywords)
+  if (hasMainHint) {
+    return false
+  }
+
+  const hasNoiseHint = includesKeyword(hint, noiseControl.noiseKeywords)
+  if (hasNoiseHint && stats.textLength < 1_600 && stats.imageCount < 4) {
+    return true
+  }
+
+  const linkDensity =
+    stats.textLength > 0 ? stats.linkTextLength / stats.textLength : 0
+  if (
+    !PRIMARY_CONTENT_TAGS.has(node.tagName) &&
+    linkDensity >= 0.82 &&
+    stats.textLength < 420
+  ) {
+    return true
+  }
+
+  return false
+}
+
 const resolveTitleAnchorFromAncestors = (
   chain: InternalElementNode[],
 ): InternalElementNode | undefined => {
@@ -766,6 +914,7 @@ const resolveTitleAnchorFromAncestors = (
 const resolveTitleAnchoredNodes = (
   nodes: InternalNode[],
   titleHint: string,
+  noiseControl: NoiseControl,
 ): {
   nodes: InternalNode[]
   focused: boolean
@@ -795,23 +944,25 @@ const resolveTitleAnchoredNodes = (
         if (anchor && !seen.has(anchor)) {
           seen.add(anchor)
           const stats = analyzeFocusStats(anchor, false)
-          const hint = readHintText(anchor)
-          const positiveBoost = POSITIVE_HINT_PATTERN.test(hint) ? 110 : 0
-          const negativePenalty = NEGATIVE_HINT_PATTERN.test(hint) ? 130 : 0
-          const linkDensity =
-            stats.textLength > 0 ? stats.linkTextLength / stats.textLength : 0
+          if (!isLikelyNoiseNode(anchor, stats, noiseControl)) {
+            const hint = readHintText(anchor)
+            const positiveBoost = POSITIVE_HINT_PATTERN.test(hint) ? 110 : 0
+            const negativePenalty = NEGATIVE_HINT_PATTERN.test(hint) ? 130 : 0
+            const linkDensity =
+              stats.textLength > 0 ? stats.linkTextLength / stats.textLength : 0
 
-          candidates.push({
-            node: anchor,
-            score:
-              titleScore * 1_000 +
-              stats.textLength +
-              stats.imageCount * 120 +
-              positiveBoost -
-              linkDensity * 260 -
-              negativePenalty -
-              Math.max(0, stats.elementCount - 320) * 1.1,
-          })
+            candidates.push({
+              node: anchor,
+              score:
+                titleScore * 1_000 +
+                stats.textLength +
+                stats.imageCount * 120 +
+                positiveBoost -
+                linkDensity * 260 -
+                negativePenalty -
+                Math.max(0, stats.elementCount - 320) * 1.1,
+            })
+          }
         }
       }
     }
@@ -873,6 +1024,7 @@ const collectFocusCandidates = (
   node: InternalNode,
   inLink: boolean,
   candidates: FocusCandidate[],
+  noiseControl: NoiseControl,
 ): FocusStats => {
   if (node.kind === 'text') {
     return {
@@ -889,7 +1041,12 @@ const collectFocusCandidates = (
 
   const childInLink = inLink || node.tagName === 'a'
   for (const child of node.children) {
-    const childStats = collectFocusCandidates(child, childInLink, candidates)
+    const childStats = collectFocusCandidates(
+      child,
+      childInLink,
+      candidates,
+      noiseControl,
+    )
     stats = mergeFocusStats(stats, childStats)
   }
 
@@ -899,7 +1056,8 @@ const collectFocusCandidates = (
 
   if (
     FOCUSABLE_TAGS.has(node.tagName) &&
-    (stats.textLength >= 60 || stats.imageCount >= 1)
+    (stats.textLength >= 60 || stats.imageCount >= 1) &&
+    !isLikelyNoiseNode(node, stats, noiseControl)
   ) {
     candidates.push({
       node,
@@ -915,6 +1073,7 @@ const resolveRenderNodes = (
   nodes: InternalNode[],
   focusThreshold: number,
   focusMainContent: boolean,
+  noiseControl: NoiseControl,
 ): {
   nodes: InternalNode[]
   focused: boolean
@@ -928,7 +1087,7 @@ const resolveRenderNodes = (
 
   const candidates: FocusCandidate[] = []
   for (const node of nodes) {
-    collectFocusCandidates(node, false, candidates)
+    collectFocusCandidates(node, false, candidates, noiseControl)
   }
 
   if (candidates.length === 0) {
@@ -981,7 +1140,10 @@ const pushTextBlock = (
   })
 }
 
-const collectBlocks = (nodes: InternalNode[]): ReaderBlock[] => {
+const collectBlocks = (
+  nodes: InternalNode[],
+  noiseControl: NoiseControl,
+): ReaderBlock[] => {
   const blocks: ReaderBlock[] = []
   let pendingBreak = true
 
@@ -997,6 +1159,17 @@ const collectBlocks = (nodes: InternalNode[]): ReaderBlock[] => {
       pendingBreak = true
     }
 
+    const hint = readHintText(node)
+    const needsNoiseCheck =
+      noiseControl.dropTags.has(node.tagName) ||
+      includesKeyword(hint, noiseControl.noiseKeywords)
+    if (needsNoiseCheck) {
+      const stats = analyzeFocusStats(node, false)
+      if (isLikelyNoiseNode(node, stats, noiseControl)) {
+        return
+      }
+    }
+
     if (node.tagName === 'img') {
       const src = readStringAttr(node.attrs, 'src')
       if (src) {
@@ -1005,6 +1178,35 @@ const collectBlocks = (nodes: InternalNode[]): ReaderBlock[] => {
           type: 'image',
           src,
           alt,
+        })
+        pendingBreak = true
+      }
+      return
+    }
+
+    if (node.tagName === 'video') {
+      const src = readStringAttr(node.attrs, 'src') ?? readSourceFromChild(node)
+
+      if (src) {
+        const poster = readStringAttr(node.attrs, 'poster')
+        blocks.push({
+          type: 'video',
+          src,
+          poster,
+        })
+        pendingBreak = true
+      }
+      return
+    }
+
+    if (node.tagName === 'iframe') {
+      const src = readStringAttr(node.attrs, 'src')
+      if (src) {
+        const title = readStringAttr(node.attrs, 'title')
+        blocks.push({
+          type: 'iframe',
+          src,
+          title,
         })
         pendingBreak = true
       }
@@ -1032,20 +1234,6 @@ const collectBlocks = (nodes: InternalNode[]): ReaderBlock[] => {
   })
 }
 
-const renderBlocksHtml = (blocks: ReaderBlock[]): string => {
-  return blocks
-    .map((block) => {
-      if (block.type === 'text') {
-        return `<p>${escapeHtml(block.text)}</p>`
-      }
-
-      const alt = block.alt ? escapeAttribute(block.alt) : ''
-      const altAttr = alt ? ` alt="${alt}"` : ' alt=""'
-      return `<img src="${escapeAttribute(block.src)}"${altAttr} loading="lazy" />`
-    })
-    .join('')
-}
-
 const blocksToText = (blocks: ReaderBlock[]): string => {
   return blocks
     .filter((block): block is Extract<ReaderBlock, { type: 'text' }> => block.type === 'text')
@@ -1058,8 +1246,9 @@ const blocksToText = (blocks: ReaderBlock[]): string => {
 const renderFromNodes = (
   nodes: InternalNode[],
   options: RenderOptions,
+  noiseControl: NoiseControl,
 ): RenderResult | undefined => {
-  const blocks = collectBlocks(nodes)
+  const blocks = collectBlocks(nodes, noiseControl)
   if (blocks.length === 0) {
     return undefined
   }
@@ -1072,11 +1261,19 @@ const renderFromNodes = (
     truncated = true
   }
 
-  let html = renderBlocksHtml(activeBlocks)
+  let rendered = defaultViewEngine.render({
+    blocks: activeBlocks,
+    title: options.titleHint,
+  })
+  let html = rendered.html
   while (html.length > options.maxHtmlLength && activeBlocks.length > 0) {
     activeBlocks = activeBlocks.slice(0, activeBlocks.length - 1)
     truncated = true
-    html = renderBlocksHtml(activeBlocks)
+    rendered = defaultViewEngine.render({
+      blocks: activeBlocks,
+      title: options.titleHint,
+    })
+    html = rendered.html
   }
 
   if (activeBlocks.length === 0 || html.length === 0) {
@@ -1084,8 +1281,8 @@ const renderFromNodes = (
   }
 
   let text = blocksToText(activeBlocks)
-  const hasImage = activeBlocks.some((block) => block.type === 'image')
-  if (text.length < options.minTextLength && !hasImage) {
+  const hasVisual = activeBlocks.some((block) => block.type !== 'text')
+  if (text.length < options.minTextLength && !hasVisual) {
     return undefined
   }
 
@@ -1100,6 +1297,7 @@ const renderFromNodes = (
     blockCount: activeBlocks.length,
     truncated,
     blocks: activeBlocks,
+    renderDocument: rendered.document,
   }
 }
 
@@ -1108,6 +1306,7 @@ const normalizeRenderOptions = (options: RecomposeOptions): RenderOptions => ({
   maxHtmlLength: options.maxHtmlLength ?? DEFAULT_MAX_HTML_LENGTH,
   maxTextLength: options.maxTextLength ?? DEFAULT_MAX_TEXT_LENGTH,
   minTextLength: options.minTextLength ?? DEFAULT_MIN_TEXT_LENGTH,
+  titleHint: options.titleHint,
 })
 
 const composeContent = (
@@ -1119,26 +1318,40 @@ const composeContent = (
   const focusMainContent = options.focusMainContent ?? false
   const focusTitleRoot = options.focusTitleRoot ?? false
   const titleHint = options.titleHint
+  const noiseControl = buildNoiseControl(options)
   const treePayload = limitTreeNodes(allNodes, maxTreeNodes)
   const renderOptions = normalizeRenderOptions(options)
 
   const titleSelection =
     focusTitleRoot && titleHint
-      ? resolveTitleAnchoredNodes(allNodes, titleHint)
+      ? resolveTitleAnchoredNodes(allNodes, titleHint, noiseControl)
       : undefined
-  const focusSelection = resolveRenderNodes(allNodes, focusThreshold, focusMainContent)
+  const focusSelection = resolveRenderNodes(
+    allNodes,
+    focusThreshold,
+    focusMainContent,
+    noiseControl,
+  )
   const firstSelection = titleSelection?.focused ? titleSelection : focusSelection
 
-  let renderResult = renderFromNodes(firstSelection.nodes, renderOptions)
+  let renderResult = renderFromNodes(
+    firstSelection.nodes,
+    renderOptions,
+    noiseControl,
+  )
   let usedFocusedNodes = firstSelection.focused
 
   if (!renderResult && titleSelection?.focused) {
-    renderResult = renderFromNodes(focusSelection.nodes, renderOptions)
+    renderResult = renderFromNodes(
+      focusSelection.nodes,
+      renderOptions,
+      noiseControl,
+    )
     usedFocusedNodes = focusSelection.focused
   }
 
   if (!renderResult && usedFocusedNodes) {
-    renderResult = renderFromNodes(allNodes, renderOptions)
+    renderResult = renderFromNodes(allNodes, renderOptions, noiseControl)
     usedFocusedNodes = false
   }
 
@@ -1146,12 +1359,25 @@ const composeContent = (
     return undefined
   }
 
+  const truncated = renderResult.truncated || treePayload.truncated
+  const quality = evaluateReaderContentQuality({
+    text: renderResult.text,
+    blocks: renderResult.blocks,
+    treeNodeCount: treePayload.nodeCount,
+    titleHint: options.titleHint,
+    noiseKeywords: noiseControl.noiseKeywords,
+    mainKeywords: noiseControl.mainKeywords,
+    truncated,
+  })
+
   return {
     html: renderResult.html,
     text: renderResult.text,
     blockCount: renderResult.blockCount,
-    truncated: renderResult.truncated || treePayload.truncated,
+    truncated,
+    quality,
     blocks: renderResult.blocks,
+    renderDocument: renderResult.renderDocument,
     tree: treePayload.tree,
     treeNodeCount: treePayload.nodeCount,
     source: options.source,
