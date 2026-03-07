@@ -1,0 +1,50 @@
+{
+  "name": "url-preview-engine",
+  "version": "0.1.0",
+  "description": "URL을 구조화된 미리보기 카드 객체로 변환하는 preview engine",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "keywords": [
+    "url",
+    "preview",
+    "metadata",
+    "opengraph",
+    "link-preview",
+    "card",
+    "embed"
+  ],
+  "author": "Kangminna <nakangmin4023@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {
+    "metascraper": "^5.0.0",
+    "metascraper-author": "^5.0.0",
+    "metascraper-date": "^5.0.0",
+    "metascraper-description": "^5.0.0",
+    "metascraper-image": "^5.0.0",
+    "metascraper-title": "^5.0.0",
+    "metascraper-url": "^5.0.0",
+    "zod": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
