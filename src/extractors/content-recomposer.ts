@@ -1253,6 +1253,11 @@ const renderFromNodes = (
     return undefined
   }
 
+  const renderTree = limitTreeNodes(
+    nodes,
+    Math.max(200, options.maxBlocks * 8),
+  ).tree
+
   let truncated = false
   let activeBlocks = blocks
 
@@ -1264,6 +1269,8 @@ const renderFromNodes = (
   let rendered = defaultViewEngine.render({
     blocks: activeBlocks,
     title: options.titleHint,
+    tree: renderTree,
+    maxBlocks: activeBlocks.length,
   })
   let html = rendered.html
   while (html.length > options.maxHtmlLength && activeBlocks.length > 0) {
@@ -1272,6 +1279,8 @@ const renderFromNodes = (
     rendered = defaultViewEngine.render({
       blocks: activeBlocks,
       title: options.titleHint,
+      tree: renderTree,
+      maxBlocks: activeBlocks.length,
     })
     html = rendered.html
   }

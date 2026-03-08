@@ -151,6 +151,40 @@ const renderReaderContent = (card) => {
   `
 }
 
+const renderRenderDocument = (card) => {
+  const doc = card.content?.renderDocument
+  if (!doc) {
+    return `
+      <section class="render-doc">
+        <h4>Render Document</h4>
+        <p class="reader-meta">renderDocument가 생성되지 않았습니다.</p>
+      </section>
+    `
+  }
+
+  const hasIndexHtml = typeof doc.indexHtml === 'string' && doc.indexHtml.length > 0
+  const hasCss = typeof doc.css === 'string' && doc.css.length > 0
+  const statusLine = [
+    `index.html: ${hasIndexHtml ? 'yes' : 'no'}`,
+    `css: ${hasCss ? 'yes' : 'no'}`,
+  ].join(' · ')
+
+  return `
+    <section class="render-doc">
+      <h4>Render Document</h4>
+      <p class="reader-meta">${statusLine}</p>
+      <details open>
+        <summary>index.html</summary>
+        <pre class="doc-code">${escapeHtml(doc.indexHtml || '')}</pre>
+      </details>
+      <details>
+        <summary>preview.css</summary>
+        <pre class="doc-code">${escapeHtml(doc.css || '')}</pre>
+      </details>
+    </section>
+  `
+}
+
 const renderCard = (card) => {
   const tags = [
     tag(`provider:${card.provider}`),
@@ -174,6 +208,7 @@ const renderCard = (card) => {
         ${description}
         ${renderSnapshot(card)}
         ${renderReaderContent(card)}
+        ${renderRenderDocument(card)}
         <a class="card-link" href="${card.resolvedUrl}" target="_blank" rel="noreferrer noopener">Open Original →</a>
       </div>
     </article>

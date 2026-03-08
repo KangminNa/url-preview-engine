@@ -12,6 +12,11 @@ export {
   createDefaultPreviewPipeline,
   PreviewStage,
 } from './engine'
+export {
+  DefaultViewEngine,
+  createDefaultViewEngine,
+  renderSemanticHtmlFromTree,
+} from './view'
 
 export type {
   AudioCard,
@@ -34,3 +39,4 @@ export type {
   ContentProfileMatchInput,
 } from './content'
 export type { PreviewPipelineState } from './engine'
+export type { ViewEngine, ViewRenderContext, ViewRenderResult } from './view'

@@ -1,4 +1,5 @@
 import type { ReaderBlock } from '../types/metadata'
+import { renderSemanticHtmlFromTree } from './semantic-tree-renderer'
 import type { ViewEngine, ViewRenderContext, ViewRenderResult } from './types'
 
 const DEFAULT_TITLE = 'Preview Document'
@@ -19,9 +20,9 @@ body {
 .preview-root {
   max-width: 840px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px 16px 32px;
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 .preview-root p {
   margin: 0;
@@ -40,6 +41,36 @@ body {
 }
 .preview-root iframe {
   min-height: 360px;
+}
+.pv-article {
+  display: grid;
+  gap: 14px;
+}
+.pv-section {
+  display: grid;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+.pv-section:last-child {
+  border-bottom: 0;
+}
+.pv-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.pv-media {
+  margin: 0;
+}
+.pv-media img,
+.pv-media video,
+.pv-media iframe {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #dbe4ef;
+  background: #ffffff;
 }
 `.trim()
 
@@ -80,6 +111,10 @@ const renderBlock = (block: ReaderBlock): string => {
   return `<iframe src="${escapeAttribute(block.src)}"${title} loading="lazy" allowfullscreen></iframe>`
 }
 
+const renderFromBlocks = (blocks: ReaderBlock[]): string => {
+  return blocks.map((block) => renderBlock(block)).join('')
+}
+
 const normalizeTitle = (value: string | undefined): string => {
   const normalized = value?.trim()
   return normalized ? normalized : DEFAULT_TITLE
@@ -93,7 +128,13 @@ export class DefaultViewEngine implements ViewEngine {
   }
 
   public render(context: ViewRenderContext): ViewRenderResult {
-    const html = context.blocks.map((block) => renderBlock(block)).join('')
+    const semanticHtml = context.tree
+      ? renderSemanticHtmlFromTree(
+          context.tree,
+          context.maxBlocks ?? context.blocks.length,
+        )
+      : undefined
+    const html = semanticHtml ?? renderFromBlocks(context.blocks)
     const title = normalizeTitle(context.title)
     const indexHtml = `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>${escapeHtml(title)}</title><link rel="stylesheet" href="./preview.css" /></head><body><main class="preview-root">${html}</main></body></html>`
 

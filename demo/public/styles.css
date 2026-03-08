@@ -303,6 +303,54 @@ h2 {
   border-top: 1px solid var(--line);
 }
 
+.render-doc {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.render-doc h4 {
+  margin: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.render-doc details {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfdff;
+  overflow: hidden;
+}
+
+.render-doc summary {
+  cursor: pointer;
+  padding: 9px 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+
+.render-doc summary::-webkit-details-marker {
+  display: none;
+}
+
+.doc-code {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #1e293b;
+  background: #f8fafc;
+}
+
 .reader-preview h4 {
   margin: 0;
   font-size: 0.78rem;

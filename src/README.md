@@ -16,6 +16,7 @@
 10. `schemas`: 런타임 계약 검증
 11. `engine`: 단계형 파이프라인 오케스트레이션
 12. `core`: 카드 팩토리 등 호환/보조 계층
+13. `view`: tree/block을 `index.html + css`로 렌더링
 
 ## 패턴
 
